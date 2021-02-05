@@ -18,9 +18,14 @@ class NearestMeans():
         self.class_mean = None # mean of each feature of each class = trained data
         self.classes_raw = None # classes of each entry
         self.classes = None # list of unique classes
+        
+        # Variables used exclusively for classification/testing
         self.distance = None # matrix of distances from each entry to each mean
-        pass
-    
+        self.class_result = None # Result of classified class list of each entry as the label name
+        self.class_result_index = None # Result of classified class of each entry as an index
+        self.error_rate = None
+        self.actual_labels = None # Labels used to compare the error rate
+        
     def import_training_dataset(self,filename : str):
         n = np.genfromtxt(filename, delimiter=",")
         
@@ -61,28 +66,58 @@ class NearestMeans():
         mean_class()
         return self.class_mean
     
-
-    def test(self):
-        assert self.features_raw is not None and self.class_mean is not None
+    def load_trained(self, class_mean, classes = None):
+        self.class_mean = class_mean
         
+        # If class labels are given, load that
+        # otherwise, use the default labels [0, 1, ...]
+        if classes is not None:
+            assert len(classes) == len(class_mean)
+            self.classes = classes
+        else: self.classes = list(range(len(x.class_mean)))
+    
+    def load_testing_data(self,features_raw_filename, labels_given=True):
+        assert self.class_mean is not None, 'Please load trained class means first'
+        
+        file_load = np.genfromtxt(filename, delimiter=",")
+        # Select the number of features equal to the number of means given. Ignore the rest
+        self.features_raw = file_load[:len(self.class_mean)]
+        
+        if labels_given is True: 
+            self.actual_labels = file_load[-1]
+        
+
+        return self.features_raw
+    
+
+    def test(self, ret = "index"):
+        assert self.features_raw is not None and self.class_mean is not None,\
+            'Please load trained data and data to be classified first'
+        
+        # Calculate the distance matrix between each data point 
+        # and each of the loaded class means
         self.distance =  cdist(self.features_raw, self.class_mean)
        
-        # Creates bins to store data from each class
-        self.class_data = [[] for _ in range(len(self.classes))]
+        # Determine the index of the nearest class mean
+        self.class_result_index = np.array(
+            [np.where(arr == np.amin(arr))[0] for arr in x.distance]).T[0]
         
-        # For each entry, place entry into the bins
-        for i in range(len(self.features_raw)):
-            self.class_data[ (np.where(self.classes == 
-                                       self.classes_raw[i])[0][0]) ].append(self.features_raw[i])
+        # Convert the resulting indices into the nearest class labels
+        self.class_result = np.array([self.classes[i] for i in self.class_result_index])
         
-        # Convert back to numpy array
-        self.class_data = np.array(self.class_data)
+        # Calculate the total error rate
         
-      #  for i in range(len(self.class_data)):
-            
-        return self.class_data
+        
+        # Return either the nearest index or nearest label
+        if ret == "labels" : return self.class_result
+        else : return self.class_result_index
         
 
+    def plot_test_results(self):
+        assert self.class_result is not None,\
+            'Please classify/test the data first.'
+        self.plot_decision_boundaries_2 \
+            (self.features_raw, self.class_result, self.class_mean)
     
     def norm_l2(self, a, b):
         a = np.array(a)
@@ -105,15 +140,15 @@ class NearestMeans():
         return self.class_data
     
     
-    def plot_decision_boundaries_2(self, training, label_train, sample_mean):
+    def plot_decision_boundaries(self, training, label_train, sample_mean):
         # Code for this method provided by Prof B. Keith Jenkins (USC)
         
         #Plot the decision boundaries and data points for minimum distance to
         #two class mean classifier
         #
-        # training: traning data
-        # label_train: class labels correspond to training data
-        # sample_mean: mean vector for each class
+        # training: traning data (features_raw)
+        # label_train: class labels correspond to training data (classes_raw-untrained or class_result - trained)
+        # sample_mean: mean vector for each class (class_mean)
         #
         # Total number of classes
         nclass =  max(np.unique(label_train))
